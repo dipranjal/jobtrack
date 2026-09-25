@@ -38,7 +38,7 @@ function LoginForm() {
     }
 
     if (mode === 'signup' && !result.data.session) {
-      setMessage('Account created. If confirmation is enabled, check your inbox before signing in.')
+      setMessage('Account created. You can sign in once your account is ready.')
     } else {
       router.push('/dashboard')
     }
