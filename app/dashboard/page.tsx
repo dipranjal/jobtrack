@@ -9,6 +9,21 @@ type Job = { id: string; company: string; role: string; location: string | null;
 const statuses = ['Saved', 'Applied', 'Interviewing', 'Offer', 'Rejected', 'Withdrawn']
 const statusClass: Record<string, string> = { Saved: 'chip-blue', Applied: 'chip-purple', Interviewing: 'chip-orange', Offer: 'chip-green', Rejected: 'chip-red', Withdrawn: 'chip-gray' }
 
+const starterApplications = [
+  { company: 'Northstar Health', role: 'Product Designer', location: 'Remote', work_type: 'Remote', status: 'Interviewing', salary_range: '$110k – $135k' },
+  { company: 'Cedar Labs', role: 'Frontend Engineer', location: 'New York, NY', work_type: 'Hybrid', status: 'Applied', salary_range: '$125k – $155k' },
+  { company: 'Atlas Finance', role: 'UX Researcher', location: 'Boston, MA', work_type: 'On-site', status: 'Saved', salary_range: '$95k – $120k' },
+  { company: 'Mosaic Studio', role: 'Brand Strategist', location: 'Remote', work_type: 'Remote', status: 'Saved', salary_range: '$85k – $105k' },
+  { company: 'Brightwell', role: 'Product Manager', location: 'Austin, TX', work_type: 'Hybrid', status: 'Applied', salary_range: '$120k – $145k' },
+  { company: 'Kindred Systems', role: 'Content Designer', location: 'Chicago, IL', work_type: 'Hybrid', status: 'Interviewing', salary_range: '$90k – $115k' },
+  { company: 'Harbor & Co.', role: 'Operations Lead', location: 'Seattle, WA', work_type: 'On-site', status: 'Rejected', salary_range: '$80k – $100k' },
+  { company: 'Juniper Cloud', role: 'Growth Marketer', location: 'Remote', work_type: 'Remote', status: 'Saved', salary_range: '$75k – $95k' },
+  { company: 'Lumen Medical', role: 'Service Designer', location: 'Philadelphia, PA', work_type: 'Hybrid', status: 'Applied', salary_range: '$100k – $125k' },
+  { company: 'Oakline Ventures', role: 'Data Analyst', location: 'Denver, CO', work_type: 'Hybrid', status: 'Saved', salary_range: '$88k – $112k' },
+]
+
+const jobColumns = 'id,company,role,location,work_type,status,salary_range,url,next_step,next_step_date'
+
 export default function Dashboard() {
   const supabase = useMemo(() => createClient(), [])
   const router = useRouter()
@@ -22,7 +37,22 @@ export default function Dashboard() {
   const [saving, setSaving] = useState(false)
 
   useEffect(() => { supabase.auth.getUser().then(({ data }) => { if (!data.user) { router.replace('/login'); return }; setUser(data.user); load(data.user.id) }) }, [supabase])
-  async function load(uid: string) { const { data } = await supabase.from('jobs').select('id,company,role,location,work_type,status,salary_range,url,next_step,next_step_date').eq('user_id', uid).order('updated_at', { ascending: false }); setJobs(data || []); setLoading(false) }
+  async function load(uid: string) {
+    const { data: existing, error } = await supabase.from('jobs').select(jobColumns).eq('user_id', uid).order('updated_at', { ascending: false })
+    if (error) { setJobs([]); setLoading(false); return }
+
+    const existingCompanies = new Set((existing || []).map((job) => job.company))
+    const missing = starterApplications.filter((job) => !existingCompanies.has(job.company))
+    let allJobs = existing || []
+
+    if (missing.length > 0) {
+      const { data: created } = await supabase.from('jobs').insert(missing.map((job) => ({ ...job, user_id: uid }))).select(jobColumns)
+      if (created) allJobs = [...created, ...allJobs]
+    }
+
+    setJobs(allJobs)
+    setLoading(false)
+  }
   async function save(e: FormEvent<HTMLFormElement>) { e.preventDefault(); if (!user) return; setSaving(true); const f = new FormData(e.currentTarget); const values = { company: String(f.get('company')), role: String(f.get('role')), location: String(f.get('location') || ''), work_type: String(f.get('work_type')), status: String(f.get('status')), salary_range: String(f.get('salary_range') || ''), url: String(f.get('url') || '') }; if (selected) { const { data } = await supabase.from('jobs').update(values).eq('id', selected.id).select('id,company,role,location,work_type,status,salary_range,url,next_step,next_step_date').single(); if (data) setJobs(jobs.map(j => j.id === selected.id ? data : j)) } else { const { data } = await supabase.from('jobs').insert({ ...values, user_id: user.id }).select('id,company,role,location,work_type,status,salary_range,url,next_step,next_step_date').single(); if (data) setJobs([data, ...jobs]) }; setSaving(false); closeModal() }
   async function remove() { if (selected) { await supabase.from('jobs').delete().eq('id', selected.id); setJobs(jobs.filter(j => j.id !== selected.id)); closeModal() } }
   function closeModal() { setModal(null); setSelected(null) }
