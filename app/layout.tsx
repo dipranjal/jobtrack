@@ -5,23 +5,10 @@ import './globals.css'
 export const metadata: Metadata = {
   title: 'JobTrack — Your job search, in motion',
   description: 'A focused workspace for tracking every job application and next step.',
-  generator: 'v0.app',
   icons: {
-    icon: [
-      {
-        url: '/icon-light-32x32.png',
-        media: '(prefers-color-scheme: light)',
-      },
-      {
-        url: '/icon-dark-32x32.png',
-        media: '(prefers-color-scheme: dark)',
-      },
-      {
-        url: '/icon.svg',
-        type: 'image/svg+xml',
-      },
-    ],
-    apple: '/apple-icon.png',
+    icon: 'https://hebbkx1anhila5yf.public.blob.vercel-storage.com/image-ObuLRfpNhebKHK0rbgZvcMykNg11qU.png',
+    shortcut: 'https://hebbkx1anhila5yf.public.blob.vercel-storage.com/image-ObuLRfpNhebKHK0rbgZvcMykNg11qU.png',
+    apple: 'https://hebbkx1anhila5yf.public.blob.vercel-storage.com/image-ObuLRfpNhebKHK0rbgZvcMykNg11qU.png',
   },
 }
 
