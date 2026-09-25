@@ -1,47 +1,35 @@
+'use client'
+
+import { FormEvent, useEffect, useMemo, useState } from 'react'
+import { createClient } from '@/lib/supabase/client'
+
+type Job = { id: string; company: string; role: string; location: string | null; work_type: string | null; status: string; applied_date: string | null; next_step: string | null; next_step_date: string | null; salary_range: string | null; url: string | null }
+const statuses = ['All', 'Saved', 'Applied', 'Interviewing', 'Offer', 'Rejected', 'Withdrawn']
+const colors: Record<string, string> = { Saved: 'slate', Applied: 'blue', Interviewing: 'amber', Offer: 'green', Rejected: 'red', Withdrawn: 'slate' }
+
 export default function Page() {
-  return (
-    <main
-      style={{
-        colorScheme: 'light dark',
-        position: 'relative',
-        display: 'flex',
-        minHeight: '100vh',
-        alignItems: 'center',
-        justifyContent: 'center',
-        backgroundColor: 'light-dark(#fff, #000)',
-        color: 'light-dark(#000, #fff)',
-      }}
-    >
-      <svg
-        aria-hidden="true"
-        style={{ width: 80, height: 80 }}
-        width={80}
-        height={80}
-        fill="none"
-        viewBox="0 0 20 20"
-        xmlns="http://www.w3.org/2000/svg"
-        stroke="currentColor"
-        strokeWidth="0.5"
-      >
-        <path
-          d="M14.2 14.2H17V6.9375C17 4.76288 15.2371 3 13.0625 3H5.8V5.8M14.2 14.2V7.79063L7.79062 14.2H14.2ZM14.2 14.2V17H6.9375C4.76288 17 3 15.2371 3 13.0625V5.8H5.8M5.8 5.8V12.2313L12.2313 5.8H5.8Z"
-          strokeLinejoin="round"
-        />
-      </svg>
-      <p
-        style={{
-          position: 'absolute',
-          left: '50%',
-          top: 'calc(50% + 56px)',
-          transform: 'translateX(-50%)',
-          whiteSpace: 'nowrap',
-          fontSize: '14px',
-          fontWeight: 500,
-          color: 'light-dark(#71717a, #a1a1aa)',
-        }}
-      >
-        Your v0 generation will show here.
-      </p>
-    </main>
-  )
+  const supabase = useMemo(() => createClient(), [])
+  const [user, setUser] = useState<any>(null)
+  const [jobs, setJobs] = useState<Job[]>([])
+  const [status, setStatus] = useState('All')
+  const [query, setQuery] = useState('')
+  const [showForm, setShowForm] = useState(false)
+  const [loading, setLoading] = useState(true)
+  const [authMode, setAuthMode] = useState<'signin' | 'signup'>('signin')
+  const [email, setEmail] = useState('')
+  const [password, setPassword] = useState('')
+  const [message, setMessage] = useState('')
+
+  useEffect(() => { supabase.auth.getUser().then(({ data }) => { setUser(data.user); if (data.user) loadJobs(data.user.id); else setLoading(false) }) }, [supabase])
+  async function loadJobs(userId: string) { const { data } = await supabase.from('jobs').select('id,company,role,location,work_type,status,applied_date,next_step,next_step_date,salary_range,url').eq('user_id', userId).order('updated_at', { ascending: false }); setJobs(data || []); setLoading(false) }
+  async function auth(e: FormEvent) { e.preventDefault(); setMessage(''); const result = authMode === 'signin' ? await supabase.auth.signInWithPassword({ email, password }) : await supabase.auth.signUp({ email, password, options: { emailRedirectTo: process.env.NEXT_PUBLIC_DEV_SUPABASE_REDIRECT_URL || `${window.location.origin}/auth/callback` } }); if (result.error) setMessage(authMode === 'signin' ? 'Invalid email or password.' : result.error.message); else if (authMode === 'signup') setMessage('Check your email to confirm your account.'); else { setUser(result.data.user); if (result.data.user) loadJobs(result.data.user.id) } }
+  async function addJob(e: FormEvent<HTMLFormElement>) { e.preventDefault(); if (!user) return; const form = new FormData(e.currentTarget); const { data, error } = await supabase.from('jobs').insert({ user_id: user.id, company: form.get('company'), role: form.get('role'), location: form.get('location'), work_type: form.get('work_type'), status: form.get('status'), salary_range: form.get('salary_range'), url: form.get('url') }).select('id,company,role,location,work_type,status,applied_date,next_step,next_step_date,salary_range,url').single(); if (!error && data) { setJobs([data, ...jobs]); setShowForm(false); e.currentTarget.reset() } }
+  async function updateStatus(id: string, next: string) { const { data } = await supabase.from('jobs').update({ status: next }).eq('id', id).select('id,company,role,location,work_type,status,applied_date,next_step,next_step_date,salary_range,url').single(); if (data) setJobs(jobs.map(job => job.id === id ? data : job)) }
+  const filtered = jobs.filter(job => (status === 'All' || job.status === status) && `${job.company} ${job.role}`.toLowerCase().includes(query.toLowerCase()))
+  const counts = statuses.slice(1).map(item => ({ label: item, count: jobs.filter(job => job.status === item).length }))
+
+  if (loading) return <main className="loading-screen">Loading your workspace...</main>
+  if (!user) return <main className="auth-screen"><div className="auth-card"><div className="brand"><span className="brand-mark">JT</span><span>JobTrack</span></div><p className="eyebrow">YOUR NEXT MOVE, ORGANIZED</p><h1>{authMode === 'signin' ? 'Welcome back.' : 'Start your search.'}</h1><p className="muted">Keep every application moving forward, without the spreadsheet chaos.</p><form onSubmit={auth} className="auth-form"><label>Email<input type="email" value={email} onChange={e => setEmail(e.target.value)} required placeholder="you@example.com" /></label><label>Password<input type="password" value={password} onChange={e => setPassword(e.target.value)} required minLength={6} placeholder="••••••••" /></label>{message && <p className="form-message">{message}</p>}<button className="primary-btn" type="submit">{authMode === 'signin' ? 'Sign in' : 'Create account'} <span>→</span></button></form><button className="text-btn" onClick={() => { setAuthMode(authMode === 'signin' ? 'signup' : 'signin'); setMessage('') }}>{authMode === 'signin' ? 'Need an account? Create one' : 'Already have an account? Sign in'}</button></div></main>
+
+  return <main className="app-shell"><header className="topbar"><div className="brand"><span className="brand-mark">JT</span><span>JobTrack</span></div><div className="top-actions"><span className="user-email">{user.email}</span><button className="icon-btn" onClick={() => supabase.auth.signOut().then(() => setUser(null))} aria-label="Sign out">↗</button></div></header><section className="content"><div className="page-heading"><div><p className="eyebrow">APPLICATIONS / {new Date().getFullYear()}</p><h1>Your job search, <em>in motion.</em></h1><p className="muted">A clear view of every opportunity and the next step.</p></div><button className="primary-btn add-btn" onClick={() => setShowForm(!showForm)}>+ Add application</button></div><div className="stats-grid"><div className="stat-card featured"><span>Total applications</span><strong>{jobs.length}</strong><small>All your active opportunities</small></div>{counts.slice(0, 3).map(item => <div className="stat-card" key={item.label}><span>{item.label}</span><strong>{item.count.toString().padStart(2, '0')}</strong><small>{item.label === 'Interviewing' ? 'Keep the momentum' : 'Applications tracked'}</small></div>)}</div>{showForm && <form className="job-form" onSubmit={addJob}><div className="form-title"><div><p className="eyebrow">NEW APPLICATION</p><h2>Add an opportunity</h2></div><button type="button" className="close-btn" onClick={() => setShowForm(false)}>×</button></div><div className="form-grid"><label>Company<input name="company" required placeholder="Acme, Inc." /></label><label>Role<input name="role" required placeholder="Product Designer" /></label><label>Location<input name="location" placeholder="Remote / New York" /></label><label>Work type<select name="work_type"><option>Remote</option><option>Hybrid</option><option>On-site</option></select></label><label>Status<select name="status">{statuses.slice(1).map(s => <option key={s}>{s}</option>)}</select></label><label>Salary range<input name="salary_range" placeholder="$120k – $150k" /></label><label className="wide">Link<input name="url" type="url" placeholder="https://..." /></label></div><button className="primary-btn" type="submit">Save application <span>→</span></button></form>}<div className="toolbar"><div className="filters">{statuses.map(item => <button key={item} className={status === item ? 'filter active' : 'filter'} onClick={() => setStatus(item)}>{item}{item !== 'All' && <b>{jobs.filter(job => job.status === item).length}</b>}</button>)}</div><input className="search" value={query} onChange={e => setQuery(e.target.value)} placeholder="Search applications..." /></div><div className="job-list">{filtered.length === 0 ? <div className="empty-state"><span>✦</span><h2>No applications yet</h2><p>Add your first opportunity and start building momentum.</p></div> : filtered.map(job => <article className="job-row" key={job.id}><div className="company-avatar">{job.company.slice(0, 1).toUpperCase()}</div><div className="job-info"><h3>{job.role}</h3><p>{job.company} <span>·</span> {job.location || 'Location not set'} <span>·</span> {job.work_type || 'Flexible'}</p></div><div className={`status-pill ${colors[job.status]}`}>{job.status}</div><div className="job-next">{job.next_step ? <><small>Next step</small><span>{job.next_step}</span></> : <small>No next step set</small>}</div><select aria-label={`Change status for ${job.role}`} className="status-select" value={job.status} onChange={e => updateStatus(job.id, e.target.value)}>{statuses.slice(1).map(s => <option key={s}>{s}</option>)}</select></article>)}</div></section></main>
 }
